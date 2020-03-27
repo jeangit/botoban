@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : ven. 27 mars 2020 (12:20:08)
+-- $$DATE$$ : ven. 27 mars 2020 (16:25:39)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -30,43 +30,43 @@ function parse_logs( unit, since, filter)
 
       if not t_ip[network] then
         -- ajouter le network qui n'était pas encore référencé.
-        -- il suffit de comparer added à last_addition pour voir si
-        -- l'ip capturée était juste un robot qui s'est perdu.
-        t_ip[network] = { added=os.time(), last_addition=os.time() }
+        t_ip[network] = { net_added=os.time(), last_host_added=os.time() }
       end
 
-        if t_ip[network][host] then
-          t_ip[network][host].count = t_ip[network][host].count + 1
-        else
-          t_ip[network][host] = { count=1 }
-          t_ip[network].last_addition=os.time()
-        end
+      if t_ip[network][host] then
+        t_ip[network][host].count = t_ip[network][host].count + 1
+      else
+        t_ip[network][host] = { host=host, count=1, host_added=os.time() }
+        -- il suffit de comparer net_added à last_host_added pour voir si
+        -- il convient de bannir le network. (si une seule IP, les deux valeurs sont == )
+        t_ip[network].last_host_added=os.time()
       end
-
     end
+
+  end
   return t_ip
 end
 
 -- fonction de debug
 function display_base( t_ip)
   for net,hosts in pairs(t_ip) do
-    print(" * ",net, "added",os.date(net.added),"last addition", os.date(net.last_addition))
+    print(" === ",net .. "*" )
     if type(hosts)=="table" then
-      for host,host_detail in pairs(hosts) do
-        print("   -->", host,host_detail)
+      local net_details=""
+      for net_detail_name,net_detail_value in pairs(hosts) do
+        if type(net_detail_value) ~= "table" then
+          net_details = net_details ..
+                      " -> " .. net_detail_name .. " : " .. os.date("%c",et_detail_value) .. "\n"
+        else
+          print("    --> ." .. net_detail_value.host,
+                          "count: " .. net_detail_value.count,
+                          "host added: " .. os.date("%c",net_detail_value.host_added))
+        end
       end
+      print(net_details)
     end
     --print("")
     end
---[[
-    for net,v in pairs(t_ip) do
-      print(net,v)
-      for i,v2 in pairs(v) do
-        print(" ->",i,v2)
-      end
-    end
---]]
-
 end
 
 function create_drop_chain()
