@@ -1,10 +1,14 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 31 mars 2020 (16:41:02)
+-- $$DATE$$ : mar. 31 mars 2020 (18:11:53)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
  - les IPs qui n'insistent pas sont débans, pour soulager netfilter.
  - sauvegarde et chargement de l'état du bannissement.
+--]]
+
+--[[ trouver networks repères de pirates:
+iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | uniq -c -d
 --]]
 
 local threshold_for_network = 3 --limite d'hotes à ne pas dépasser avant de bannir le network
@@ -89,10 +93,9 @@ function display_base( t_ip)
 end
 
 function create_drop_chain()
+  print(" -- create botoban chain (if doesn't exist)")
   -- true/nil , exec, code sortie
-  print(" -- création chain botoban")
-  -- TODO : check that the chain "botoban" doesn't exist, for avoiding redudancy of rules
-  local res, _, code = os.execute( "iptables -N botoban; iptables -A botoban -j DROP")
+  local res, _, code = os.execute( "iptables -L botoban >/dev/null || (iptables -N botoban && iptables -A botoban -j DROP)")
 end
 
 function add_drop( ip, existing_rules)
@@ -133,7 +136,7 @@ end
 
 function main()
   local existing_rules = get_existing_rules()
-  local t_ip = parse_logs( "sshd","1 hour", "invalid user")
+  local t_ip = parse_logs( "sshd","2 days", "invalid user")
  
   --display_base( t_ip)
   create_drop_chain()
