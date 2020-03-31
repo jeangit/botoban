@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 30 mars 2020 (17:09:22)
+-- $$DATE$$ : mar. 31 mars 2020 (16:41:02)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -51,6 +51,18 @@ function parse_logs( unit, since, filter)
   return t_ip
 end
 
+function get_existing_rules()
+  local rules = {}
+--  rules = os.execute("
+  local extract_ips = [[iptables -L INPUT -n | sed '/botoban/!d;s/[^\-]*--[\t\ ]\+\(\([0-9\.]\+\)\{4\}\).*/\1/']]
+  for l in io.popen( extract_ips):lines() do
+    rules[l]=l
+  end
+
+  return rules
+end
+
+
 -- fonction de debug
 function display_base( t_ip)
   for net,hosts in pairs(t_ip) do
@@ -79,32 +91,37 @@ end
 function create_drop_chain()
   -- true/nil , exec, code sortie
   print(" -- création chain botoban")
+  -- TODO : check that the chain "botoban" doesn't exist, for avoiding redudancy of rules
   local res, _, code = os.execute( "iptables -N botoban; iptables -A botoban -j DROP")
 end
 
-function add_drop( ip)
-  local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
-  --print( drop)
-  os.execute( drop)
+function add_drop( ip, existing_rules)
+  if not existing_rules[ip] then
+    local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
+    print( "ban :",ip)
+    os.execute( drop)
+  else
+    print ("already banned :",ip)
+  end
 end
 
 function remove_drop( ip, criterion)
 
 end
 
-function drop_rascals( t_ip)
+function drop_rascals( t_ip, existing_rules)
   for net,hosts in pairs( t_ip) do
     nb_hosts_in_this_network = t_ip[net].nb_hosts
-    print ("net",net,"nb hotes", nb_hosts_in_this_network)
+    --print ("net",net,"nb hotes", nb_hosts_in_this_network)
     if nb_hosts_in_this_network > threshold_for_network then
       -- trop d'hotes dans ce network, bannir sa plage
-      add_drop( net .. "0/24")
+      add_drop( net .. "0/24", existing_rules)
     else
       -- itérer sur les hotes en dessous du seuil et les bannir individuellement
       if type(hosts) == "table" then
         for _, host in pairs( hosts) do
           if type(host) == "table" then
-            add_drop ( net .. host.host)
+            add_drop ( net .. host.host, existing_rules)
           end
         end
       end
@@ -115,11 +132,13 @@ function drop_rascals( t_ip)
 end
 
 function main()
+  local existing_rules = get_existing_rules()
   local t_ip = parse_logs( "sshd","1 hour", "invalid user")
-  
+ 
   --display_base( t_ip)
   create_drop_chain()
-  drop_rascals( t_ip)
+  drop_rascals( t_ip, existing_rules)
+
 
 
 end
