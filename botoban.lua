@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 01 avril 2020 (17:06:02)
+-- $$DATE$$ : mer. 01 avril 2020 (19:06:05)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -138,6 +138,28 @@ function drop_rascals( t_ip, existing_rules)
 
 end
 
+function save_base( t_ip, t_ip_filename)
+  local dump_location = exec_path .. t_ip_filename
+  local hFile = io.open( dump_location, "w+")
+  if hFile then
+    local is_ok,err = hFile:write( tprint( t_ip))
+    if not is_ok then
+      print( err)
+    else
+      print( "written :",dump_location)
+    end
+    hFile:close()
+  else
+    print( "something funny happened when attempting to create ", t_ip_filename)
+  end
+end
+
+function load_base( t_ip_filename)
+  local t_ip = {}
+
+  return t_ip
+end
+
 function main()
   local existing_rules = get_existing_rules()
   local t_ip = parse_logs( "sshd","1 hour", "invalid user")
@@ -147,7 +169,7 @@ function main()
   create_drop_chain()
   drop_rascals( t_ip, existing_rules)
 
-  --print(tprint(t_ip))
+  save_base( t_ip, "database.lua")
 
 
 end
