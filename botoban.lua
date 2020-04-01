@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 31 mars 2020 (18:11:53)
+-- $$DATE$$ : mer. 01 avril 2020 (17:06:02)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -12,6 +12,10 @@ iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | u
 --]]
 
 local threshold_for_network = 3 --limite d'hotes à ne pas dépasser avant de bannir le network
+exec_path=debug.getinfo(1,"S").source:sub(2)
+exec_path=exec_path:match("(.*/)") or "./"
+package.path = package.path .. ";" .. exec_path  .. "?.lua"
+tprint = require "tprint"
 
 function coroutine_logs( unit, since)
   local corout = coroutine.create( function()
@@ -136,12 +140,14 @@ end
 
 function main()
   local existing_rules = get_existing_rules()
-  local t_ip = parse_logs( "sshd","2 days", "invalid user")
- 
+  local t_ip = parse_logs( "sshd","1 hour", "invalid user")
+  -- pour postfix: LOGIN authentication failed
+
   --display_base( t_ip)
   create_drop_chain()
   drop_rascals( t_ip, existing_rules)
 
+  --print(tprint(t_ip))
 
 
 end

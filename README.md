@@ -27,3 +27,7 @@ You'll have to launch Botoban as root user, as it uses iptables.
 
 
 ## Launch
+
+## Credits
+
+For serializing tables : tprint.lua from TsT (https://github.com/tst2005/lua-tprint/)
