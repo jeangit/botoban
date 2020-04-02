@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 01 avril 2020 (19:06:05)
+-- $$DATE$$ : jeu. 02 avril 2020 (20:16:02)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -160,17 +160,34 @@ function load_base( t_ip_filename)
   return t_ip
 end
 
+function get_config( config)
+  local is_err, err_msg = 0, "config ok"
+  if arg[1] then
+
+  else
+    is_err = 1
+    err_msg = "You must provide the configuration filename."
+  end
+
+  return is_err, err_msg
+end
+
 function main()
-  local existing_rules = get_existing_rules()
-  local t_ip = parse_logs( "sshd","1 hour", "invalid user")
-  -- pour postfix: LOGIN authentication failed
+  local is_err, err_msg = get_config(arg[1])
 
-  --display_base( t_ip)
-  create_drop_chain()
-  drop_rascals( t_ip, existing_rules)
+  if not is_err then
+    local existing_rules = get_existing_rules()
+    local t_ip = parse_logs( "sshd","1 hour", "invalid user")
+    -- pour postfix: LOGIN authentication failed
 
-  save_base( t_ip, "database.lua")
+    --display_base( t_ip)
+    create_drop_chain()
+    drop_rascals( t_ip, existing_rules)
 
+    save_base( t_ip, "database.lua")
+  else
+    print( err_msg)
+  end
 
 end
 
