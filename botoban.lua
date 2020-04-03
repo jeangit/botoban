@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : ven. 03 avril 2020 (18:32:06)
+-- $$DATE$$ : ven. 03 avril 2020 (18:39:40)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -10,8 +10,6 @@
 --[[ trouver networks repères de pirates:
 iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | uniq -c -d
 --]]
-
-local threshold_for_network = 3 --limite d'hotes à ne pas dépasser avant de bannir le network
 
 exec_path=debug.getinfo(1,"S").source:sub(2)
 exec_path=exec_path:match("(.*/)") or "./"
@@ -116,11 +114,11 @@ function remove_drop( ip, criterion)
 
 end
 
-function drop_rascals( t_ip, existing_rules)
+function drop_rascals( t_ip, existing_rules, config)
   for net,hosts in pairs( t_ip) do
     nb_hosts_in_this_network = t_ip[net].nb_hosts
     --print ("net",net,"nb hotes", nb_hosts_in_this_network)
-    if nb_hosts_in_this_network > threshold_for_network then
+    if nb_hosts_in_this_network > config.threshold_for_network then
       -- trop d'hotes dans ce network, bannir sa plage
       add_drop( net .. "0/24", existing_rules)
     else
@@ -208,7 +206,7 @@ function main()
 
     --display_base( t_ip)
     create_drop_chain()
-    drop_rascals( t_ip, existing_rules)
+    drop_rascals( t_ip, existing_rules, config)
 
     save_base( t_ip, config.database or "base")
   else
