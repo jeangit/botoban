@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : ven. 03 avril 2020 (18:39:40)
+-- $$DATE$$ : ven. 03 avril 2020 (20:32:33)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -13,7 +13,7 @@ iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | u
 
 exec_path=debug.getinfo(1,"S").source:sub(2)
 exec_path=exec_path:match("(.*/)") or "./"
-package.path = package.path .. ";" .. exec_path  .. "?.lua"
+package.path = package.path .. ";" .. exec_path  .. "?.lua;" .. exec_path .. "?"
 tprint = require "tprint"
 
 function coroutine_logs( unit, since)
@@ -100,11 +100,15 @@ function create_drop_chain()
   local res, _, code = os.execute( "iptables -L botoban >/dev/null || (iptables -N botoban && iptables -A botoban -j DROP)")
 end
 
-function add_drop( ip, existing_rules)
+function add_drop( ip, existing_rules, whitelist)
   if not existing_rules[ip] then
-    local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
-    print( "ban :",ip)
-    os.execute( drop)
+    if not whitelist[ip] then
+      local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
+      print( "ban :",ip)
+      os.execute( drop)
+    else
+      print( "do not ban (whitelisted) :",ip)
+    end
   else
     print ("already banned :",ip)
   end
@@ -114,19 +118,29 @@ function remove_drop( ip, criterion)
 
 end
 
+-- les networks déja bannis pour cette session
+local session_network_bans = {}
+
 function drop_rascals( t_ip, existing_rules, config)
+  local network_threshold = config.threshold_for_network
+  local host_threshold = config.threshold_for_hosts
+
   for net,hosts in pairs( t_ip) do
     nb_hosts_in_this_network = t_ip[net].nb_hosts
     --print ("net",net,"nb hotes", nb_hosts_in_this_network)
-    if nb_hosts_in_this_network > config.threshold_for_network then
+    if nb_hosts_in_this_network > network_threshold then
       -- trop d'hotes dans ce network, bannir sa plage
-      add_drop( net .. "0/24", existing_rules)
+      local net_ban = net .. "0/24"
+      if not session_network_bans[net_ban] then
+        add_drop( net_ban, existing_rules, config.whitelist)
+        session_network_bans[net_ban] = net_ban
+      end
     else
       -- itérer sur les hotes en dessous du seuil et les bannir individuellement
       if type(hosts) == "table" then
         for _, host in pairs( hosts) do
-          if type(host) == "table" then
-            add_drop ( net .. host.host, existing_rules)
+          if type(host) == "table" and host.count > host_threshold then
+            add_drop ( net .. host.host, existing_rules, config.whitelist)
           end
         end
       end
@@ -156,7 +170,7 @@ function load_base( t_ip_filename)
 
   local res,t_ip = pcall( require, t_ip_filename)
   if not res then
-    print( "no database found, will create a new one")
+    print( "no database found, will create a new one.")
     t_ip = {}
   end
 
@@ -185,6 +199,7 @@ function parse_logs_loop( logs, t_ip)
   local is_err, err_msg = nil, "parse logs ok"
   if logs then
     for _,log in pairs(logs) do
+      print("parsing unit", log[1])
       t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)
     end
 
