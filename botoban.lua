@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : jeu. 02 avril 2020 (20:16:02)
+-- $$DATE$$ : ven. 03 avril 2020 (16:12:29)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -12,6 +12,7 @@ iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | u
 --]]
 
 local threshold_for_network = 3 --limite d'hotes à ne pas dépasser avant de bannir le network
+
 exec_path=debug.getinfo(1,"S").source:sub(2)
 exec_path=exec_path:match("(.*/)") or "./"
 package.path = package.path .. ";" .. exec_path  .. "?.lua"
@@ -155,7 +156,14 @@ function save_base( t_ip, t_ip_filename)
 end
 
 function load_base( t_ip_filename)
-  local t_ip = {}
+  local is_err, err_msg, t_ip = 0, "database loaded", {}
+
+  t_ip = require( t_ip_filename)
+  if not t_ip then
+    is_err = 1
+    err_msg = "no database loaded"
+    t_ip = {}
+  end
 
   return t_ip
 end
@@ -164,19 +172,33 @@ function get_config( config)
   local is_err, err_msg = 0, "config ok"
   if arg[1] then
 
+
   else
     is_err = 1
     err_msg = "You must provide the configuration filename."
   end
 
-  return is_err, err_msg
+  return is_err, err_msg, config
+end
+
+function parse_logs_loop( logs, t_ip)
+  local is_err, err_msg = 0, "parse logs ok"
+  if logs then
+
+  else
+    is_err = 1
+    err_msg = "No logs defined in configuration"
+  end
+    
 end
 
 function main()
-  local is_err, err_msg = get_config(arg[1])
+  local is_err, err_msg, config = get_config(arg[1])
 
   if not is_err then
     local existing_rules = get_existing_rules()
+    local is_err, err_msg, t_ip = load_base( config.database or "base")
+    t_ip = parse_logs_loop( config.logs, t_ip)
     local t_ip = parse_logs( "sshd","1 hour", "invalid user")
     -- pour postfix: LOGIN authentication failed
 
@@ -184,7 +206,7 @@ function main()
     create_drop_chain()
     drop_rascals( t_ip, existing_rules)
 
-    save_base( t_ip, "database.lua")
+    save_base( t_ip, config.database or "base")
   else
     print( err_msg)
   end
