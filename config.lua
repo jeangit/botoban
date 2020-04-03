@@ -1,3 +1,4 @@
+return
 {
   -- limit of hosts before banning the whole network
   threshold_for_network = 3,
@@ -13,7 +14,7 @@
   logs = {
     { "sshd","1 hour", "invalid user" },
     { "postfix", "1 hour", "LOGIN authentication failed" }
-  }
+  },
 
   -- database name to use for saving / loading IPs harvested
   database = "database"

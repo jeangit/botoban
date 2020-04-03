@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : ven. 03 avril 2020 (16:12:29)
+-- $$DATE$$ : ven. 03 avril 2020 (18:32:06)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -28,8 +28,7 @@ function coroutine_logs( unit, since)
   return corout
 end
 
-function parse_logs( unit, since, filter)
-  local t_ip = { }
+function parse_logs( unit, since, filter, t_ip)
   local co = coroutine_logs( unit, since)
   while coroutine.status( co) ~= "dead" do
     local is_running,line = coroutine.resume( co)
@@ -40,7 +39,7 @@ function parse_logs( unit, since, filter)
 
       if not t_ip[network] then
         -- ajouter le network qui n'était pas encore référencé.
-        t_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0 }
+        t_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0, unit=unit }
       end
 
       if t_ip[network][host] then
@@ -143,7 +142,7 @@ function save_base( t_ip, t_ip_filename)
   local dump_location = exec_path .. t_ip_filename
   local hFile = io.open( dump_location, "w+")
   if hFile then
-    local is_ok,err = hFile:write( tprint( t_ip))
+    local is_ok,err = hFile:write( "return ", tprint( t_ip))
     if not is_ok then
       print( err)
     else
@@ -156,23 +155,26 @@ function save_base( t_ip, t_ip_filename)
 end
 
 function load_base( t_ip_filename)
-  local is_err, err_msg, t_ip = 0, "database loaded", {}
 
-  t_ip = require( t_ip_filename)
-  if not t_ip then
-    is_err = 1
-    err_msg = "no database loaded"
+  local res,t_ip = pcall( require, t_ip_filename)
+  if not res then
+    print( "no database found, will create a new one")
     t_ip = {}
   end
 
   return t_ip
 end
 
-function get_config( config)
-  local is_err, err_msg = 0, "config ok"
+function get_config( config_file)
+  local is_err, err_msg = nil, "config ok"
+  local config
+
   if arg[1] then
-
-
+    config = require( config_file)
+    if not config then
+      is_err = 1
+      err_msg = "invalid configuration " .. config_file
+    end
   else
     is_err = 1
     err_msg = "You must provide the configuration filename."
@@ -182,14 +184,18 @@ function get_config( config)
 end
 
 function parse_logs_loop( logs, t_ip)
-  local is_err, err_msg = 0, "parse logs ok"
+  local is_err, err_msg = nil, "parse logs ok"
   if logs then
+    for _,log in pairs(logs) do
+      t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)
+    end
 
   else
     is_err = 1
     err_msg = "No logs defined in configuration"
   end
-    
+  
+  return is_err, err_msg, t_ip
 end
 
 function main()
@@ -197,10 +203,8 @@ function main()
 
   if not is_err then
     local existing_rules = get_existing_rules()
-    local is_err, err_msg, t_ip = load_base( config.database or "base")
-    t_ip = parse_logs_loop( config.logs, t_ip)
-    local t_ip = parse_logs( "sshd","1 hour", "invalid user")
-    -- pour postfix: LOGIN authentication failed
+    t_ip = load_base( config.database or "base")
+    is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
 
     --display_base( t_ip)
     create_drop_chain()
