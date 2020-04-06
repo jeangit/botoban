@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : ven. 03 avril 2020 (20:32:33)
+-- $$DATE$$ : lun. 06 avril 2020 (16:48:03)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -59,10 +59,10 @@ end
 
 function get_existing_rules()
   local rules = {}
---  rules = os.execute("
-  local extract_ips = [[iptables -L INPUT -n | sed '/botoban/!d;s/[^\-]*--[\t\ ]\+\(\([0-9\.]\+\)\{4\}\).*/\1/']]
+  local extract_ips = [[iptables --line-number -L INPUT -nv | sed '/botoban/!d;s/^\([0-9]\+\)[\ \t]\+\([0-9]\+\)[^\*]*[^0-9]\+\(\([0-9\.]\+\)\{4\}\).*/\1;\2;\3/']]
   for l in io.popen( extract_ips):lines() do
-    rules[l]=l
+    local line,occurs,ip = l:match( "(%d+);(%d+);(.*)")
+    table.insert( rules, { line=line, occurs=tonumber(occurs), ip=ip })
   end
 
   return rules
@@ -119,6 +119,7 @@ function remove_drop( ip, criterion)
 end
 
 -- les networks déja bannis pour cette session
+-- TODO : avec les données de get_existing_rules, retirer les hotes correspondant à ces networks
 local session_network_bans = {}
 
 function drop_rascals( t_ip, existing_rules, config)
@@ -211,17 +212,45 @@ function parse_logs_loop( logs, t_ip)
   return is_err, err_msg, t_ip
 end
 
+function remove_no_match( existing_rules)
+  if existing_rules then
+    -- itérer depuis la fin, car iptables décale les lignes à
+    -- chaque effacement d'une régle
+    for i = #existing_rules,1,-1 do
+      local infos_ip = existing_rules[i]
+      if infos_ip.occurs == 0 then -- TODO :mettre une valeur de seuil plutôt que 0
+        print( "removing no match IP", infos_ip.ip,"at line :", infos_ip.line)
+        os.execute( "iptables -D INPUT " .. infos_ip.line)
+      end
+    end
+  end
+end
+
+-- for speeding up treatment when looking if IP is already banned
+function get_ip_already_blocked( rules)
+  local ip_blocked = {}
+  for _,v in ipairs(rules) do ip_blocked[v.ip] = v.ip end
+  return ip_blocked
+end
+
 function main()
   local is_err, err_msg, config = get_config(arg[1])
 
   if not is_err then
     local existing_rules = get_existing_rules()
+
+    local ip_already_blocked = get_ip_already_blocked( existing_rules)
+
     t_ip = load_base( config.database or "base")
     is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
 
     --display_base( t_ip)
     create_drop_chain()
-    drop_rascals( t_ip, existing_rules, config)
+    drop_rascals( t_ip, ip_already_blocked, config)
+
+    if config.remove_no_match == true then
+      remove_no_match( existing_rules)
+    end
 
     save_base( t_ip, config.database or "base")
   else
