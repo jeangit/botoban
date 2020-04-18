@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 06 avril 2020 (16:48:03)
+-- $$DATE$$ : sam. 18 avril 2020 (13:12:33)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -15,6 +15,7 @@ exec_path=debug.getinfo(1,"S").source:sub(2)
 exec_path=exec_path:match("(.*/)") or "./"
 package.path = package.path .. ";" .. exec_path  .. "?.lua;" .. exec_path .. "?"
 tprint = require "tprint"
+
 
 function coroutine_logs( unit, since)
   local corout = coroutine.create( function()
@@ -100,12 +101,35 @@ function create_drop_chain()
   local res, _, code = os.execute( "iptables -L botoban >/dev/null || (iptables -N botoban && iptables -A botoban -j DROP)")
 end
 
-function add_drop( ip, existing_rules, whitelist)
+local temp_f = {}
+local function write_to_temp_file( txt, temp_filename)
+  local handle = temp_f[temp_filename]
+  if not handle then
+    local tfn = "/tmp/" .. temp_filename
+    handle = io.open( tfn, "w+")
+    if not handle then print("error when creating ",tfn); os.exit(1) end
+    temp_f[temp_filename] = handle
+  end
+
+  handle:write( txt)
+end
+
+local function close_temp_files()
+  for _,handle in pairs(temp_f) do
+    handle:close()
+  end
+
+end
+
+
+function add_drop( ip, existing_rules, whitelist, ipfilter_name)
   if not existing_rules[ip] then
     if not whitelist[ip] then
-      local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
+      --local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
+      local drop = string.format("add %s %s", ipfilter_name, ip)
       print( "ban :",ip)
-      os.execute( drop)
+      write_to_temp_file( drop, ipfilter_name)
+      --os.execute( drop)
     else
       print( "do not ban (whitelisted) :",ip)
     end
@@ -133,7 +157,7 @@ function drop_rascals( t_ip, existing_rules, config)
       -- trop d'hotes dans ce network, bannir sa plage
       local net_ban = net .. "0/24"
       if not session_network_bans[net_ban] then
-        add_drop( net_ban, existing_rules, config.whitelist)
+        add_drop( net_ban, existing_rules, config.whitelist, "ipfilter_net")
         session_network_bans[net_ban] = net_ban
       end
     else
@@ -141,7 +165,7 @@ function drop_rascals( t_ip, existing_rules, config)
       if type(hosts) == "table" then
         for _, host in pairs( hosts) do
           if type(host) == "table" and host.count > host_threshold then
-            add_drop ( net .. host.host, existing_rules, config.whitelist)
+            add_drop ( net .. host.host, existing_rules, config.whitelist, "ipfilter_host")
           end
         end
       end
@@ -257,6 +281,7 @@ function main()
     print( err_msg)
   end
 
+  close_temp_files()
 end
 
 main()
