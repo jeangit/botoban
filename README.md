@@ -11,6 +11,7 @@ It uses journalctl, netfilter (iptables interface) and Lua.
 
 1. Linux with systemd (obviously most of distros around).
 1. Lua (scripting language available on every distro).
+1. ipset (for blocking big batches of IP). Companion application of `iptables`, but often not installed by default.
 
 ## Rights
 
@@ -18,9 +19,10 @@ You'll have to launch Botoban as root user, as it uses iptables.
 
 
 ## Features
-1. Does not lie in memory, exit when the job is done.
+1. Does not spread out in memory, exit when the job is done.
 1. Use well known shell interfaces, doesn't reinvent wheel.
 1. Use Lua table as its own database: no need to mess with external database.
+1. Use ipset for adding the whole earth if you want.
 1. Ban entire network, above a defined threshold of hosts IPs.
 1. Can be installed anywhere in your path, in a single directory for all it needs.
 

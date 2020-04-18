@@ -6,7 +6,7 @@ return
   threshold_for_hosts = 100,
 
   -- remove rules when no hit on the host
-  remove_no_match = false,
+  remove_no_match = true,
 
   -- IP that should not be banned
   whitelist = {

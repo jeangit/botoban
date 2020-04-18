@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : sam. 18 avril 2020 (13:12:33)
+-- $$DATE$$ : sam. 18 avril 2020 (16:24:21)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -126,7 +126,7 @@ function add_drop( ip, existing_rules, whitelist, ipfilter_name)
   if not existing_rules[ip] then
     if not whitelist[ip] then
       --local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
-      local drop = string.format("add %s %s", ipfilter_name, ip)
+      local drop = string.format("add %s %s\n", ipfilter_name, ip)
       print( "ban :",ip)
       write_to_temp_file( drop, ipfilter_name)
       --os.execute( drop)
