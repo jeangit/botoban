@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : sam. 18 avril 2020 (16:24:21)
+-- $$DATE$$ : mar. 21 avril 2020 (17:12:23)
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -96,9 +96,15 @@ function display_base( t_ip)
 end
 
 function create_drop_chain()
+  print(" -- create iplist blacklists")
+  os.execute( "ipset create blacklist_hosts hash:ip")
+  os.execute( "ipset create blacklist_nets hash:net")
+  -- TODO prévoir un flush si la liste existe, et que le flush est prévu dans la config
   print(" -- create botoban chain (if doesn't exist)")
   -- true/nil , exec, code sortie
   local res, _, code = os.execute( "iptables -L botoban >/dev/null || (iptables -N botoban && iptables -A botoban -j DROP)")
+--  iptables -I INPUT -m set --match-set blacklist_hosts src -j botoban
+--  iptables -I INPUT -m set --match-set blacklist_dests src -j botoban
 end
 
 local temp_f = {}
@@ -157,7 +163,7 @@ function drop_rascals( t_ip, existing_rules, config)
       -- trop d'hotes dans ce network, bannir sa plage
       local net_ban = net .. "0/24"
       if not session_network_bans[net_ban] then
-        add_drop( net_ban, existing_rules, config.whitelist, "ipfilter_net")
+        add_drop( net_ban, existing_rules, config.whitelist, "blaklist_nets")
         session_network_bans[net_ban] = net_ban
       end
     else
@@ -165,7 +171,7 @@ function drop_rascals( t_ip, existing_rules, config)
       if type(hosts) == "table" then
         for _, host in pairs( hosts) do
           if type(host) == "table" and host.count > host_threshold then
-            add_drop ( net .. host.host, existing_rules, config.whitelist, "ipfilter_host")
+            add_drop ( net .. host.host, existing_rules, config.whitelist, "blacklist_hosts")
           end
         end
       end
