@@ -25,6 +25,7 @@ You'll have to launch Botoban as root user, as it uses iptables.
 1. Use ipset for adding the whole earth if you want.
 1. Ban entire network, above a defined threshold of hosts IPs.
 1. Can be installed anywhere in your path, in a single directory for all it needs.
+1. Modules for parsing special files (like dmesg)
 
 ## Configuration
 
