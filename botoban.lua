@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 21 avril 2020 (19:55:43)
+-- $$DATE$$ : mar. 28 avril 2020 10:57:52
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -15,6 +15,7 @@ exec_path=debug.getinfo(1,"S").source:sub(2)
 exec_path=exec_path:match("(.*/)") or "./"
 package.path = package.path .. ";" .. exec_path  .. "?.lua;" .. exec_path .. "?"
 tprint = require "tprint"
+range = require "range"
 
 
 function coroutine_logs( unit, since)

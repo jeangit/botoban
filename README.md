@@ -38,4 +38,7 @@ It's a Lua table, self documented.
 
 ## Credits
 
-For serializing tables : tprint.lua from TsT (https://github.com/tst2005/lua-tprint/)
+Botoban wouldn't be the same without them.
+
+1. For serializing tables : tprint.lua from TsT (https://github.com/tst2005/lua-tprint/)
+1. For range searching : Rhodium Toad reviewed & corrected original code (https://github.com/RhodiumToad)
