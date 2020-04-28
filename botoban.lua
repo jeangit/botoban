@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 28 avril 2020 10:57:52
+-- $$DATE$$ : mar. 28 avril 2020 20:18:00
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -16,6 +16,7 @@ exec_path=exec_path:match("(.*/)") or "./"
 package.path = package.path .. ";" .. exec_path  .. "?.lua;" .. exec_path .. "?"
 tprint = require "tprint"
 range = require "range"
+ip_tools = require "ip_tools"
 
 
 function coroutine_logs( unit, since)
@@ -234,8 +235,12 @@ function parse_logs_loop( logs, t_ip)
   local is_err, err_msg = nil, "parse logs ok"
   if logs then
     for _,log in pairs(logs) do
-      print("parsing unit", log[1])
-      t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)
+      if log[1] == "dmesg" then
+        parse_dmesg( log[2], t_ip)
+      else
+        print("parsing unit", log[1])
+        t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)
+      end
     end
 
   else

@@ -1,8 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 28 avril 2020 15:43:33
-
--- https://lite.ip2location.com/russian-federation-ip-address-ranges
--- sed 's/[0-9,]\+$//;s/[\ \t]\+/;/' ip_russes
+-- $$DATE$$ : mar. 28 avril 2020 20:15:13
 
 range = require "range"
 
@@ -31,7 +28,7 @@ local function ip_to_string( ip)
   return table.concat(to_string,".")
 end
 
-local function gen_ip_range( file)
+local function load_ip_range( file)
   local t={}
   for l in io.lines( file) do
     -- format attendu: ip_start;ip_end
@@ -59,7 +56,7 @@ end
 if ... then 
   -- module
   return {
-    gen_ip_range = gen_ip_range,
+    load_ip_range = load_ip_range,
     ip_to_integer = ip_to_integer,
     ip_to_string = ip_to_string
   }
