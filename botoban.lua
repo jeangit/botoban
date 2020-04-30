@@ -19,9 +19,33 @@ range = require "range"
 ip_tools = require "ip_tools"
 
 
-function coroutine_logs( unit, since)
+local function add_database( t_ip, line)
+  local ip = line:match( "%d+%.%d+%.%d+%.%d+")
+  local network=ip:match("%d+%.%d+%.%d+%.")
+  local host=ip:match(".*%.(%d+)")
+  --print(ip,host,network)
+  if not t_ip[network] then
+    -- ajouter le network qui n'était pas encore référencé.
+    t_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0, unit=unit }
+  end
+
+  if t_ip[network][host] then
+    -- l'hôte existe déjà, incrémenter son compteur de hits
+    t_ip[network][host].count = t_ip[network][host].count + 1
+  else
+    t_ip[network][host] = { host=host, count=1, host_added=os.time() }
+    -- il suffit de comparer net_added à last_host_added pour voir si
+    -- il convient de bannir le network. (si une seule IP, les deux valeurs sont == )
+    t_ip[network].last_host_added=os.time()
+    -- en moins violent, on peut aussi décider de bannir si le nombre d'hôtes dépasse un seuil.
+    t_ip[network].nb_hosts = t_ip[network].nb_hosts + 1
+  end
+
+  return t_ip
+end
+
+function coroutine_logs( cmd)
   local corout = coroutine.create( function()
-    local cmd = string.format('journalctl -u %s --no-pager --since "%s ago"', unit, since)
     for l in io.popen( cmd):lines() do
       coroutine.yield(l)
     end
@@ -29,34 +53,28 @@ function coroutine_logs( unit, since)
   return corout
 end
 
-function parse_logs( unit, since, filter, t_ip)
-  local co = coroutine_logs( unit, since)
+function call_coroutine_logs( cmd, t_ip, filter)
+  local co = coroutine_logs( cmd)
   while coroutine.status( co) ~= "dead" do
     local is_running,line = coroutine.resume( co)
     if ( line and line:find( filter)) then
-      local ip = line:match( "%d+%.%d+%.%d+%.%d+")
-      local network=ip:match("%d+%.%d+%.%d+%.")
-      local host=ip:match(".*%.(%d+)")
-
-      if not t_ip[network] then
-        -- ajouter le network qui n'était pas encore référencé.
-        t_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0, unit=unit }
-      end
-
-      if t_ip[network][host] then
-        -- l'hôte existe déjà, incrémenter son compteur de hits
-        t_ip[network][host].count = t_ip[network][host].count + 1
-      else
-        t_ip[network][host] = { host=host, count=1, host_added=os.time() }
-        -- il suffit de comparer net_added à last_host_added pour voir si
-        -- il convient de bannir le network. (si une seule IP, les deux valeurs sont == )
-        t_ip[network].last_host_added=os.time()
-        -- en moins violent, on peut aussi décider de bannir si le nombre d'hôtes dépasse un seuil.
-        t_ip[network].nb_hosts = t_ip[network].nb_hosts + 1
-      end
+      t_ip = add_database( t_ip,line)
+      --print("added",filter,line)
     end
 
   end
+  return t_ip
+end
+
+function parse_journald_logs( unit, since, filter, t_ip)
+  local cmd = string.format('journalctl -u %s --no-pager --since "%s ago"', unit, since)
+  t_ip = call_coroutine_logs( cmd, t_ip, filter)
+  return t_ip
+end
+
+function parse_dmesg_logs( filter, t_ip)
+  local cmd = string.format("dmesg") -- | sed '/%s/!d;s/.*SRC=\([0-9\.]\+\).*/\1/' | sort | uniq", filter)
+  t_ip = call_coroutine_logs(cmd, t_ip, filter)
   return t_ip
 end
 
@@ -236,10 +254,10 @@ function parse_logs_loop( logs, t_ip)
   if logs then
     for _,log in pairs(logs) do
       if log[1] == "dmesg" then
-        parse_dmesg( log[2], t_ip)
-      else
+        parse_dmesg_logs( log[2], t_ip)
+      else -- assume it's journald log
         print("parsing unit", log[1])
-        t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)
+        t_ip = parse_journald_logs( log[1],log[2],log[3] ,t_ip)
       end
     end
 
@@ -282,7 +300,7 @@ function main()
 
     t_ip = load_base( config.database or "base")
     is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
-
+    --os.exit(1)
     --display_base( t_ip)
     create_drop_chain()
     drop_rascals( t_ip, ip_already_blocked, config)

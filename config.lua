@@ -15,11 +15,13 @@ return
   },
 
   -- journald logs used for detecting IPs to ban.
-  -- format : unit name, time to scan, string to detect
+  -- format :
+  -- unit name, time to scan, string to detect (for journald)
+  -- "dmesg" , pattern_to_search (for dmesg)
   logs = {
     { "sshd","1 hour", "invalid user" },
-    { "postfix", "1 hour", "LOGIN authentication failed" }
-    { "dmesg", "", "ssh" }
+    { "postfix", "1 hour", "LOGIN authentication failed" },
+    { "dmesg", "ssh" }
   },
 
   -- database name to use for saving / loading IPs harvested
