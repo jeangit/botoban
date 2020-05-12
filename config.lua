@@ -15,15 +15,21 @@ return
   },
 
   -- journald logs used for detecting IPs to ban.
-  -- format : unit name, time to scan, string to detect
+  -- format :
+  -- unit name, time to scan, string to detect (for journald)
+  -- "dmesg" , pattern_to_search (for dmesg)
   logs = {
     { "sshd","1 hour", "invalid user" },
     { "postfix", "1 hour", "LOGIN authentication failed" },
+<<<<<<< HEAD
     { "dmesg", "", "ssh" },
     -- blacklist and whitelist are using another format
     -- "blacklist" or "whitelist", "ip_file", "port", "chain"
     -- those lists contains *networks* ip lists (_not_ hosts!)
     { "whitelist", "ip_french.txt", "23", "INPUT" }
+=======
+    { "dmesg", "ssh" }
+>>>>>>> f5682c398282535360b811a6e8ad63349bfb55db
   },
 
   -- database name to use for saving / loading IPs harvested
