@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 28 avril 2020 20:18:00
+-- $$DATE$$ : mar. 12 mai 2020 16:59:41
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -97,6 +97,7 @@ function display_base( t_ip)
     end
 end
 
+-- TODO à factoriser (voir create_ipset() qui contient ce qu'il faut pour remplacer ça)
 function create_drop_chain()
   print(" -- create iplist blacklists")
   os.execute( "ipset create blacklist_hosts hash:ip")
@@ -231,12 +232,64 @@ function get_config( config_file)
   return is_err, err_msg, config
 end
 
+function is_file_existing( name)
+   local f=io.open(name,"r")
+   if f ~= nil then
+     io.close(f) return true
+   else
+     return false
+   end
+end
+
+
+-- sourcefile contains NET (not host !) ip list (one per line)
+function create_ipset( sourcefile_with_path)
+  local is_ok = true
+  local ipset_name = sourcefile_with_path:gsub( ".*%/?([^%.]+).*","%1")
+
+  if ( is_file_existing( sourcefile_with_path)) then
+    local command_create = string.format( "ipset create %s hash:net", ipset_name)
+    local command_addfile = string.format( "ipset restore -! < " .. sourcefile_with_path)
+    os.execute( command_create)
+    os.execute( command_addfile)
+    
+  -- true/nil , exec, code sortie
+  --[[
+  local res, _, code = os.execute( "if [ $(iptables -L INPUT | grep blacklist | wc -l) -eq 0 ]; then iptables -I INPUT -m set --match-set blacklist_hosts src -j botoban; iptables -I INPUT -m set --match-set blacklist_nets src -j botoban; fi")
+  local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set blacklist_hosts src -j botoban; iptables -I FORWARD -m set --match-set blacklist_nets src -j botoban; fi")
+  --]]
+
+  else
+    print(" ERROR file does not exist", sourcefile)
+    is_ok = false
+  end
+
+
+  return is_ok
+end
+
+
+function add_whitelist( config)
+  local whitelist_file = config[2]
+  local port = config[3]
+  local chain = config[4]
+
+  local is_ok = create_ipset( exec_path .. whitelist_file)
+
+end
+
 function parse_logs_loop( logs, t_ip)
   local is_err, err_msg = nil, "parse logs ok"
   if logs then
     for _,log in pairs(logs) do
       if log[1] == "dmesg" then
         parse_dmesg( log[2], t_ip)
+
+      elseif log[1] == "whitelist" then
+        add_whitelist( log )
+
+      elseif log[1] == "blacklist" then
+        print("TODO implementing blacklist")
       else
         print("parsing unit", log[1])
         t_ip = parse_logs( log[1],log[2],log[3] ,t_ip)

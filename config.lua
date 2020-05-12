@@ -18,8 +18,12 @@ return
   -- format : unit name, time to scan, string to detect
   logs = {
     { "sshd","1 hour", "invalid user" },
-    { "postfix", "1 hour", "LOGIN authentication failed" }
-    { "dmesg", "", "ssh" }
+    { "postfix", "1 hour", "LOGIN authentication failed" },
+    { "dmesg", "", "ssh" },
+    -- blacklist and whitelist are using another format
+    -- "blacklist" or "whitelist", "ip_file", "port", "chain"
+    -- those lists contains *networks* ip lists (_not_ hosts!)
+    { "whitelist", "ip_french.txt", "23", "INPUT" }
   },
 
   -- database name to use for saving / loading IPs harvested
