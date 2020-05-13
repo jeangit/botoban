@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 12 mai 2020 17:03:50
+-- $$DATE$$ : mer. 13 mai 2020 11:57:08
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -17,6 +17,7 @@ package.path = package.path .. ";" .. exec_path  .. "?.lua;" .. exec_path .. "?"
 tprint = require "tprint"
 range = require "range"
 ip_tools = require "ip_tools"
+fs_tools = require "fs_tools"
 
 
 local function add_database( t_ip, line)
@@ -131,26 +132,6 @@ function create_drop_chain()
   local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set blacklist_hosts src -j botoban; iptables -I FORWARD -m set --match-set blacklist_nets src -j botoban; fi")
 end
 
-local temp_f = {}
-local function write_to_temp_file( txt, temp_filename)
-  local handle = temp_f[temp_filename]
-  if not handle then
-    local tfn = "/tmp/" .. temp_filename
-    handle = io.open( tfn, "w+")
-    if not handle then print("error when creating ",tfn); os.exit(1) end
-    temp_f[temp_filename] = handle
-  end
-
-  handle:write( txt)
-end
-
-local function close_temp_files()
-  for _,handle in pairs(temp_f) do
-    handle:close()
-  end
-
-end
-
 
 function add_drop( ip, existing_rules, whitelist, ipfilter_name)
   if not existing_rules[ip] then
@@ -205,67 +186,13 @@ function drop_rascals( t_ip, existing_rules, config)
 
 end
 
-function save_base( t_ip, t_ip_filename)
-  local dump_location = exec_path .. t_ip_filename
-  local hFile = io.open( dump_location, "w+")
-  if hFile then
-    local is_ok,err = hFile:write( "return ", tprint( t_ip))
-    if not is_ok then
-      print( err)
-    else
-      print( "written :",dump_location)
-    end
-    hFile:close()
-  else
-    print( "something funny happened when attempting to create ", t_ip_filename)
-  end
-end
-
-function load_base( t_ip_filename)
-
-  local res,t_ip = pcall( require, t_ip_filename)
-  if not res then
-    print( "no database found, will create a new one.")
-    t_ip = {}
-  end
-
-  return t_ip
-end
-
-function get_config( config_file)
-  local is_err, err_msg = nil, "config ok"
-  local config
-
-  if arg[1] then
-    config = require( config_file)
-    if not config then
-      is_err = 1
-      err_msg = "invalid configuration " .. config_file
-    end
-  else
-    is_err = 1
-    err_msg = "You must provide the configuration filename."
-  end
-
-  return is_err, err_msg, config
-end
-
-function is_file_existing( name)
-   local f=io.open(name,"r")
-   if f ~= nil then
-     io.close(f) return true
-   else
-     return false
-   end
-end
-
 
 -- sourcefile contains NET (not host !) ip list (one per line)
 function create_ipset( sourcefile_with_path)
   local is_ok = true
   local ipset_name = sourcefile_with_path:gsub( ".*%/?([^%.]+).*","%1")
 
-  if ( is_file_existing( sourcefile_with_path)) then
+  if ( fs_tools.is_existing( sourcefile_with_path)) then
     local command_create = string.format( "ipset create %s hash:net", ipset_name)
     local command_addfile = string.format( "ipset restore -! < " .. sourcefile_with_path)
     os.execute( command_create)
@@ -308,8 +235,7 @@ function parse_logs_loop( logs, t_ip)
 
       elseif log[1] == "blacklist" then
         print("TODO implementing blacklist")
-      else
-        parse_dmesg_logs( log[2], t_ip)
+
       else -- assume it's journald log
         print("parsing unit", log[1])
         t_ip = parse_journald_logs( log[1],log[2],log[3] ,t_ip)
@@ -338,22 +264,27 @@ function remove_no_match( existing_rules)
   end
 end
 
+
 -- for speeding up treatment when looking if IP is already banned
 function get_ip_already_blocked( rules)
   local ip_blocked = {}
-  for _,v in ipairs(rules) do ip_blocked[v.ip] = v.ip end
+  local existing_rules = get_existing_rules()
+
+  for _,v in ipairs( existing_rules) do ip_blocked[v.ip] = v.ip end
+  
   return ip_blocked
 end
 
+
 function main()
-  local is_err, err_msg, config = get_config(arg[1])
+  local is_err, err_msg, config = fs_tools.load_table(arg[1])
 
   if not is_err then
-    local existing_rules = get_existing_rules()
 
     local ip_already_blocked = get_ip_already_blocked( existing_rules)
 
-    t_ip = load_base( config.database or "base")
+    -- load previously saved table of banned IPs.
+    t_ip = fs_tools.load_or_create_table( config.database or "base")
     is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
     --os.exit(1)
     --display_base( t_ip)
@@ -364,7 +295,8 @@ function main()
       remove_no_match( existing_rules)
     end
 
-    save_base( t_ip, config.database or "base")
+    fs_tools.save_table( t_ip, config.database or "base")
+
   else
     print( err_msg)
   end
