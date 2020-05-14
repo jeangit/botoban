@@ -1,5 +1,13 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mar. 28 avril 2020 20:15:13
+-- $$DATE$$ : jeu. 14 mai 2020 14:06:23
+
+-- https://lite.ip2location.com/ip-address-ranges-by-country
+-- https://lite.ip2location.com/france-ip-address-ranges
+-- dumper avec lynx
+-- sed '/^[\t\ ]*[0-9\t\ \.,]\+$/!d;s/[\t\ ]*\([0-9\.]\+\)[\t\ ]*\([0-9\.]\+\)[\t\ ]*\([0-9,]\+\)/\1;\2;\3/g;s/,//g' french_ip.dump >french_ip
+
+-- plus simple (moins complet que ip2location.com) :
+-- https://www.nirsoft.net/countryip/fr.html
 
 range = require "range"
 
@@ -28,26 +36,56 @@ local function ip_to_string( ip)
   return table.concat(to_string,".")
 end
 
-local function load_ip_range( file)
+
+local netmask_cache = {}
+local function get_netmask( nb_hosts)
+
+  -- éviter de recalculer tout le temps le même masque réseau.
+  local netmask = netmask_cache[nb_hosts]
+
+  if not netmask then
+    local i = nb_hosts
+    netmask = 32
+    i = i-1
+    while i ~= 0 do
+      netmask=netmask-1
+      i = i >> 1
+    end
+    netmask = "/" .. netmask
+    netmask_cache[nb_hosts] = netmask -- cache résultat pour future demande
+  end
+  return netmask
+end
+
+
+-- renvoi un tableau d'ip numériques avec le netmask sous format ascii (/xx)
+-- entrée : ip début (ascii), ip fin (ascii) , nombre d'hotes
+-- sortie : tableau de  { (début (numérique),fin (numérique),netmask (ascii : slash suivi du masque)) }
+local function gen_ip_range( file)
   local t={}
   for l in io.lines( file) do
     -- format attendu: ip_start;ip_end
-    local from,to= l:match("([^;]+);(.*)")
+    local from,to,sum = l:match("([^;]+);([^;]+);(.*)")
     local t_from = ip_to_integer( from)
     local t_to = ip_to_integer( to)
-    table.insert( t, { t_from, t_to })
-
+    local netmask = get_netmask( sum)
+    table.insert( t, { t_from, t_to, netmask })
   end
 
   return t
 end
 
+
 -- test (start)
 local function main()
-  local french_range = gen_ip_range( "ip_french.txt")
+  -- recherche d'une ip dans la range
+  local french_range = gen_ip_range( "french_ip")
   local check_ip = ip_to_integer("2.16.117.1")
   local res = range.search( check_ip, french_range)
   print("res",res)
+  
+  print(get_netmask(65536))
+
 end
 -- test (end)
 
@@ -56,7 +94,7 @@ end
 if ... then 
   -- module
   return {
-    load_ip_range = load_ip_range,
+    gen_ip_range = gen_ip_range,
     ip_to_integer = ip_to_integer,
     ip_to_string = ip_to_string
   }

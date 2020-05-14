@@ -1,9 +1,9 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 13 mai 2020 11:53:56
+-- $$DATE$$ : mer. 13 mai 2020 14:27:30
 
 
 local temp_f = {}
-local function write_to_temp_file( txt, temp_filename)
+local function write_to_tempfile( txt, temp_filename)
   local handle = temp_f[temp_filename]
   if not handle then
     local tfn = "/tmp/" .. temp_filename
@@ -15,7 +15,7 @@ local function write_to_temp_file( txt, temp_filename)
   handle:write( txt)
 end
 
-local function close_temp_files()
+local function close_tempfiles()
   for _,handle in pairs(temp_f) do
     handle:close()
   end
@@ -98,7 +98,9 @@ if ... then
     load_table = load_table,
     load_or_create_table = load_or_create_table,
     save_table = save_table,
-    is_existing = is_existing
+    is_existing = is_existing,
+    write_to_tempfile = write_to_tempfile,
+    close_tempfiles = close_tempfiles
   }
 else
   -- test

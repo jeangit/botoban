@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 13 mai 2020 11:57:08
+-- $$DATE$$ : mer. 13 mai 2020 14:32:58
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -139,7 +139,7 @@ function add_drop( ip, existing_rules, whitelist, ipfilter_name)
       --local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
       local drop = string.format("add %s %s\n", ipfilter_name, ip)
       print( "ban :",ip)
-      write_to_temp_file( drop, ipfilter_name)
+      fs_tools.write_to_temp_file( drop, ipfilter_name)
       --os.execute( drop)
     else
       print( "do not ban (whitelisted) :",ip)
@@ -278,6 +278,7 @@ end
 
 function main()
   local is_err, err_msg, config = fs_tools.load_table(arg[1])
+  local is_dryrun = arg[2]=="dryrun" and true or false
 
   if not is_err then
 
@@ -286,22 +287,23 @@ function main()
     -- load previously saved table of banned IPs.
     t_ip = fs_tools.load_or_create_table( config.database or "base")
     is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
-    --os.exit(1)
-    --display_base( t_ip)
-    create_drop_chain()
-    drop_rascals( t_ip, ip_already_blocked, config)
+    
+    if dryrun == false then
+      create_drop_chain()
+      drop_rascals( t_ip, ip_already_blocked, config)
 
-    if config.remove_no_match == true then
-      remove_no_match( existing_rules)
+      if config.remove_no_match == true then
+        remove_no_match( existing_rules)
+      end
+
+      fs_tools.save_table( t_ip, config.database or "base")
     end
-
-    fs_tools.save_table( t_ip, config.database or "base")
 
   else
     print( err_msg)
   end
 
-  close_temp_files()
+  fs_tools.close_tempfiles()
 end
 
 main()
