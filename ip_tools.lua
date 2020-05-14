@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : jeu. 14 mai 2020 14:06:23
+-- $$DATE$$ : jeu. 14 mai 2020 16:34:00
 
 -- https://lite.ip2location.com/ip-address-ranges-by-country
 -- https://lite.ip2location.com/france-ip-address-ranges
@@ -75,6 +75,17 @@ local function gen_ip_range( file)
   return t
 end
 
+-- génère une table de netmask à partir de la table retournée par gen_ip_range
+local function gen_netmask( t)
+  local nets = {}
+
+  for _,v in pairs( t) do
+    nets[#nets+1] = ip_to_string(v[1]) .. v[3]
+  end
+
+  return nets
+end
+
 
 -- test (start)
 local function main()
@@ -86,6 +97,8 @@ local function main()
   
   print(get_netmask(65536))
 
+  local nets = gen_netmask( french_range)
+  --for _,v in pairs(nets) do print(v) end
 end
 -- test (end)
 
@@ -95,6 +108,7 @@ if ... then
   -- module
   return {
     gen_ip_range = gen_ip_range,
+    gen_netmask = gen_netmask,
     ip_to_integer = ip_to_integer,
     ip_to_string = ip_to_string
   }

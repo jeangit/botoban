@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 13 mai 2020 14:27:30
+-- $$DATE$$ : jeu. 14 mai 2020 16:19:03
 
 
 local temp_f = {}
@@ -22,7 +22,7 @@ local function close_tempfiles()
 end
 
 
-function save_table( t, t_filename)
+local function save_table( t, t_filename)
   local dump_location = exec_path .. t_filename
   local hFile = io.open( dump_location, "w+")
   if hFile then
@@ -40,7 +40,7 @@ end
 
 
 
-function is_existing( filename)
+local function is_existing( filename)
    local f = io.open( filename,"r")
    if f ~= nil then
      io.close(f) return true
@@ -63,7 +63,7 @@ end
 
 -- load a table by requiring it.
 -- table filename must exist.
-function load_table( t_filename)
+local function load_table( t_filename)
   local is_err, err_msg = nil, "load table: ok"
   local t
 

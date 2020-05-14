@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 13 mai 2020 14:32:58
+-- $$DATE$$ : jeu. 14 mai 2020 16:17:27
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -215,11 +215,18 @@ end
 
 
 function add_whitelist( config)
-  local whitelist_file = config[2]
+  local whitelist_file = exec_path .. config[2]
   local port = config[3]
   local chain = config[4]
+  local whitelist = {}
 
-  local is_ok = create_ipset( exec_path .. whitelist_file)
+  if ( fs_tools.is_existing( whitelist_file)) then
+    --local is_ok = create_ipset( whitelist_file)
+    local ip_range = ip_tools.gen_ip_range( whitelist_file)
+  else
+    print ("ERROR ! Whitelist file does not exist:", whitelist_file)
+    os.exit(1)
+  end
 
 end
 
