@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 18 mai 2020 16:35:19
+-- $$DATE$$ : lun. 18 mai 2020 16:58:59
 
 
 -- note: handle is optional. If not provided, new temp file will be created
@@ -13,11 +13,46 @@ local function write_to_tempfile( buffer, handle)
   return handle
 end
 
+function file( filename, mode)
+
+  local t = nil
+
+  local hFile = io.open( filename, mode)
+  if not hFile then
+    print( "error opening",filename,mode)
+
+  else
+    t = {
+      read_line = function()
+        return hFile:read("*l")
+      end
+    }
+
+    local mt = {
+      __gc = function()
+          hFile:close()
+      end
+    }
+
+    setmetatable( t, mt)
+  end
+
+  return t
+end
+
+local function open_ro( filename)
+  return file( filename, "r")
+end
+
+local function open_rw( filename)
+  return file( filename, "rw")
+end
 
 
 local function save_table( t, t_filename)
   local dump_location = exec_path .. t_filename
-  local hFile = io.open( dump_location, "w+")
+
+  local hFile = open_rw( t_filename)
   if hFile then
     local is_ok,err = hFile:write( "return ", tprint( t))
     if not is_ok then
@@ -25,21 +60,15 @@ local function save_table( t, t_filename)
     else
       print( "written :",dump_location)
     end
-    hFile:close()
-  else
-    print( "something funny happened when attempting to create", t_filename)
   end
 end
 
 
 
 local function is_existing( filename)
-   local f = io.open( filename,"r")
-   if f ~= nil then
-     io.close(f) return true
-   else
-     return false
-   end
+   local is_ok = open_ro( filename)
+   if is_ok then is_ok = true end
+   return is_ok
 end
 
 -- if table does not exists, return a new one
