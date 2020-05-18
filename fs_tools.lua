@@ -1,25 +1,18 @@
 #!/usr/bin/env lua
--- $$DATE$$ : jeu. 14 mai 2020 16:19:03
+-- $$DATE$$ : lun. 18 mai 2020 16:35:19
 
 
-local temp_f = {}
-local function write_to_tempfile( txt, temp_filename)
-  local handle = temp_f[temp_filename]
-  if not handle then
-    local tfn = "/tmp/" .. temp_filename
-    handle = io.open( tfn, "w+")
-    if not handle then print("error when creating ",tfn); os.exit(1) end
-    temp_f[temp_filename] = handle
+-- note: handle is optional. If not provided, new temp file will be created
+-- returns: handle
+local function write_to_tempfile( buffer, handle)
+  if handle == nil then
+    handle = io.tmpfile()
   end
 
-  handle:write( txt)
+  handle:write( buffer)
+  return handle
 end
 
-local function close_tempfiles()
-  for _,handle in pairs(temp_f) do
-    handle:close()
-  end
-end
 
 
 local function save_table( t, t_filename)
@@ -99,8 +92,7 @@ if ... then
     load_or_create_table = load_or_create_table,
     save_table = save_table,
     is_existing = is_existing,
-    write_to_tempfile = write_to_tempfile,
-    close_tempfiles = close_tempfiles
+    write_to_tempfile = write_to_tempfile
   }
 else
   -- test

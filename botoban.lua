@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : jeu. 14 mai 2020 16:17:27
+-- $$DATE$$ : lun. 18 mai 2020 16:35:17
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -310,7 +310,6 @@ function main()
     print( err_msg)
   end
 
-  fs_tools.close_tempfiles()
 end
 
 main()
