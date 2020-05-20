@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 18 mai 2020 16:35:17
+-- $$DATE$$ : mer. 20 mai 2020 14:32:40
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -20,29 +20,29 @@ ip_tools = require "ip_tools"
 fs_tools = require "fs_tools"
 
 
-local function add_database( t_ip, line)
+local function add_database( db_ip, line)
   local ip = line:match( "%d+%.%d+%.%d+%.%d+")
   local network=ip:match("%d+%.%d+%.%d+%.")
   local host=ip:match(".*%.(%d+)")
   --print(ip,host,network)
-  if not t_ip[network] then
+  if not db_ip[network] then
     -- ajouter le network qui n'était pas encore référencé.
-    t_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0, unit=unit }
+    db_ip[network] = { net_added=os.time(), last_host_added=os.time(), nb_hosts=0, unit=unit }
   end
 
-  if t_ip[network][host] then
+  if db_ip[network][host] then
     -- l'hôte existe déjà, incrémenter son compteur de hits
-    t_ip[network][host].count = t_ip[network][host].count + 1
+    db_ip[network][host].count = db_ip[network][host].count + 1
   else
-    t_ip[network][host] = { host=host, count=1, host_added=os.time() }
+    db_ip[network][host] = { host=host, count=1, host_added=os.time() }
     -- il suffit de comparer net_added à last_host_added pour voir si
     -- il convient de bannir le network. (si une seule IP, les deux valeurs sont == )
-    t_ip[network].last_host_added=os.time()
+    db_ip[network].last_host_added=os.time()
     -- en moins violent, on peut aussi décider de bannir si le nombre d'hôtes dépasse un seuil.
-    t_ip[network].nb_hosts = t_ip[network].nb_hosts + 1
+    db_ip[network].nb_hosts = db_ip[network].nb_hosts + 1
   end
 
-  return t_ip
+  return db_ip
 end
 
 function coroutine_logs( cmd)
@@ -54,35 +54,35 @@ function coroutine_logs( cmd)
   return corout
 end
 
-function call_coroutine_logs( cmd, t_ip, filter)
+function call_coroutine_logs( cmd, db_ip, filter)
   local co = coroutine_logs( cmd)
   while coroutine.status( co) ~= "dead" do
     local is_running,line = coroutine.resume( co)
     if ( line and line:find( filter)) then
-      t_ip = add_database( t_ip,line)
+      db_ip = add_database( db_ip,line)
       --print("added",filter,line)
     end
 
   end
-  return t_ip
+  return db_ip
 end
 
-function parse_journald_logs( unit, since, filter, t_ip)
+function parse_journald_logs( unit, since, filter, db_ip)
   local cmd = string.format('journalctl -u %s --no-pager --since "%s ago"', unit, since)
-  t_ip = call_coroutine_logs( cmd, t_ip, filter)
-  return t_ip
+  db_ip = call_coroutine_logs( cmd, db_ip, filter)
+  return db_ip
 end
 
-function parse_dmesg_logs( filter, t_ip)
+function parse_dmesg_logs( filter, db_ip)
   local cmd = string.format("dmesg") -- | sed '/%s/!d;s/.*SRC=\([0-9\.]\+\).*/\1/' | sort | uniq", filter)
-  t_ip = call_coroutine_logs(cmd, t_ip, filter)
-  return t_ip
+  db_ip = call_coroutine_logs(cmd, db_ip, filter)
+  return db_ip
 end
 
 function get_existing_rules()
   local rules = {}
-  local extract_ips = [[iptables --line-number -L INPUT -nv | sed '/botoban/!d;s/^\([0-9]\+\)[\ \t]\+\([0-9]\+\)[^\*]*[^0-9]\+\(\([0-9\.]\+\)\{4\}\).*/\1;\2;\3/']]
-  for l in io.popen( extract_ips):lines() do
+  local extracdb_ips = [[iptables --line-number -L INPUT -nv | sed '/botoban/!d;s/^\([0-9]\+\)[\ \t]\+\([0-9]\+\)[^\*]*[^0-9]\+\(\([0-9\.]\+\)\{4\}\).*/\1;\2;\3/']]
+  for l in io.popen( extracdb_ips):lines() do
     local line,occurs,ip = l:match( "(%d+);(%d+);(.*)")
     table.insert( rules, { line=line, occurs=tonumber(occurs), ip=ip })
   end
@@ -92,8 +92,8 @@ end
 
 
 -- fonction de debug
-function display_base( t_ip)
-  for net,hosts in pairs(t_ip) do
+function display_base( db_ip)
+  for net,hosts in pairs(db_ip) do
     print(" === ",net .. "*" )
     if type(hosts)=="table" then
       local net_details=""
@@ -157,12 +157,12 @@ end
 -- TODO : avec les données de get_existing_rules, retirer les hotes correspondant à ces networks
 local session_network_bans = {}
 
-function drop_rascals( t_ip, existing_rules, config)
+function drop_rascals( db_ip, existing_rules, config)
   local network_threshold = config.threshold_for_network
   local host_threshold = config.threshold_for_hosts
 
-  for net,hosts in pairs( t_ip) do
-    nb_hosts_in_this_network = t_ip[net].nb_hosts
+  for net,hosts in pairs( db_ip) do
+    nb_hosts_in_this_network = db_ip[net].nb_hosts
     --print ("net",net,"nb hotes", nb_hosts_in_this_network)
     if nb_hosts_in_this_network > network_threshold then
       -- trop d'hotes dans ce network, bannir sa plage
@@ -230,31 +230,31 @@ function add_whitelist( config)
 
 end
 
-function parse_logs_loop( logs, t_ip)
-  local is_err, err_msg = nil, "parse logs ok"
-  if logs then
-    for _,log in pairs(logs) do
-      if log[1] == "dmesg" then
-        parse_dmesg( log[2], t_ip)
+function parse_sources( sources, db_ip)
+  local is_err, err_msg = false, "parse sources ok"
+  if sources then
+    for _,src in pairs(sources) do
+      if src[1] == "dmesg" then
+        parse_dmesg( src[2], db_ip)
 
-      elseif log[1] == "whitelist" then
-        add_whitelist( log )
+      elseif src[1] == "whitelist" then
+        add_whitelist( src)
 
-      elseif log[1] == "blacklist" then
+      elseif src[1] == "blacklist" then
         print("TODO implementing blacklist")
 
       else -- assume it's journald log
-        print("parsing unit", log[1])
-        t_ip = parse_journald_logs( log[1],log[2],log[3] ,t_ip)
+        print("parsing unit", src[1])
+        db_ip = parse_journald_logs( src[1],src[2],src[3] ,db_ip)
       end
     end
 
   else
-    is_err = 1
-    err_msg = "No logs defined in configuration"
+    is_err = true
+    err_msg = "No sources defined in configuration"
   end
   
-  return is_err, err_msg, t_ip
+  return is_err, err_msg, db_ip
 end
 
 function remove_no_match( existing_rules)
@@ -273,7 +273,7 @@ end
 
 
 -- for speeding up treatment when looking if IP is already banned
-function get_ip_already_blocked( rules)
+function get_already_blocked( rules)
   local ip_blocked = {}
   local existing_rules = get_existing_rules()
 
@@ -289,21 +289,24 @@ function main()
 
   if not is_err then
 
-    local ip_already_blocked = get_ip_already_blocked( existing_rules)
+    local ip_already_blocked = get_already_blocked( existing_rules)
 
     -- load previously saved table of banned IPs.
-    t_ip = fs_tools.load_or_create_table( config.database or "base")
-    is_err, err_msg, t_ip = parse_logs_loop( config.logs, t_ip)
+    local db_ip = fs_tools.load_or_create_table( config.database or "base")
+    is_err, err_msg, db_ip = parse_sources( config.sources, db_ip)
     
-    if dryrun == false then
+    if is_dryrun == false and is_err == false then
       create_drop_chain()
-      drop_rascals( t_ip, ip_already_blocked, config)
+      drop_rascals( db_ip, ip_already_blocked, config)
 
       if config.remove_no_match == true then
         remove_no_match( existing_rules)
       end
 
-      fs_tools.save_table( t_ip, config.database or "base")
+      fs_tools.save_table( db_ip, config.database or "base")
+    else
+      if is_err then print(err_msg) end
+      if dryrun then print(" *** dry run : no changes ***") end
     end
 
   else
