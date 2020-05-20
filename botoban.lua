@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 20 mai 2020 14:32:40
+-- $$DATE$$ : mer. 20 mai 2020 16:42:30
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -19,6 +19,8 @@ range = require "range"
 ip_tools = require "ip_tools"
 fs_tools = require "fs_tools"
 
+local filename_banned_nets = "/tmp/banned_nets"
+local filename_banned_hosts = "/tmp/banned_hosts"
 
 local function add_database( db_ip, line)
   local ip = line:match( "%d+%.%d+%.%d+%.%d+")
@@ -79,17 +81,6 @@ function parse_dmesg_logs( filter, db_ip)
   return db_ip
 end
 
-function get_existing_rules()
-  local rules = {}
-  local extracdb_ips = [[iptables --line-number -L INPUT -nv | sed '/botoban/!d;s/^\([0-9]\+\)[\ \t]\+\([0-9]\+\)[^\*]*[^0-9]\+\(\([0-9\.]\+\)\{4\}\).*/\1;\2;\3/']]
-  for l in io.popen( extracdb_ips):lines() do
-    local line,occurs,ip = l:match( "(%d+);(%d+);(.*)")
-    table.insert( rules, { line=line, occurs=tonumber(occurs), ip=ip })
-  end
-
-  return rules
-end
-
 
 -- fonction de debug
 function display_base( db_ip)
@@ -119,28 +110,28 @@ end
 -- TODO à factoriser (voir create_ipset() qui contient ce qu'il faut pour remplacer ça)
 function create_drop_chain()
   print(" -- create iplist blacklists")
-  os.execute( "ipset create blacklist_hosts hash:ip")
-  os.execute( "ipset create blacklist_nets hash:net")
+  os.execute( "ipset create banned_hosts hash:ip")
+  os.execute( "ipset create banned_nets hash:net")
   print(" -- adding to blacklist")
-  os.execute( "ipset restore -! < /tmp/blacklist_hosts")
-  os.execute( "ipset restore -! < /tmp/blacklist_nets")
+  os.execute( "ipset restore -! < " .. filename_banned_hosts)
+  os.execute( "ipset restore -! < " .. filename_banned_nets)
   -- TODO prévoir un flush si la liste existe, et que le flush est prévu dans la config
   print(" -- create botoban chain (if doesn't exist)")
   -- true/nil , exec, code sortie
   local res, _, code = os.execute( "iptables -L botoban >/dev/null || (iptables -N botoban && iptables -A botoban -j DROP)")
-  local res, _, code = os.execute( "if [ $(iptables -L INPUT | grep blacklist | wc -l) -eq 0 ]; then iptables -I INPUT -m set --match-set blacklist_hosts src -j botoban; iptables -I INPUT -m set --match-set blacklist_nets src -j botoban; fi")
-  local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set blacklist_hosts src -j botoban; iptables -I FORWARD -m set --match-set blacklist_nets src -j botoban; fi")
+  local res, _, code = os.execute( "if [ $(iptables -L INPUT | grep blacklist | wc -l) -eq 0 ]; then iptables -I INPUT -m set --match-set banned_hosts src -j botoban; iptables -I INPUT -m set --match-set banned_nets src -j botoban; fi")
+  local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set banned_hosts src -j botoban; iptables -I FORWARD -m set --match-set banned_nets src -j botoban; fi")
 end
 
 
-function add_drop( ip, existing_rules, whitelist, ipfilter_name)
+function add_drop_to_file( ip, existing_rules, whitelist, ipfilter_name, destfile)
+
   if not existing_rules[ip] then
     if not whitelist[ip] then
       --local drop = string.format("iptables -A INPUT -s %s -j botoban", ip)
       local drop = string.format("add %s %s\n", ipfilter_name, ip)
       print( "ban :",ip)
-      fs_tools.write_to_temp_file( drop, ipfilter_name)
-      --os.execute( drop)
+      destfile.write( drop)
     else
       print( "do not ban (whitelisted) :",ip)
     end
@@ -154,12 +145,15 @@ function remove_drop( ip, criterion)
 end
 
 -- les networks déja bannis pour cette session
--- TODO : avec les données de get_existing_rules, retirer les hotes correspondant à ces networks
+-- TODO : avec les données de la base d'IPs bloquées, retirer les hotes correspondant à ces networks
 local session_network_bans = {}
 
-function drop_rascals( db_ip, existing_rules, config)
+function drop_rascals( db_ip, ip_already_banned, config)
   local network_threshold = config.threshold_for_network
   local host_threshold = config.threshold_for_hosts
+
+  local Hbanned_nets = fs_tools.open_truncate( filename_banned_nets)
+  local Hbanned_hosts = fs_tools.open_truncate( filename_banned_hosts)
 
   for net,hosts in pairs( db_ip) do
     nb_hosts_in_this_network = db_ip[net].nb_hosts
@@ -168,7 +162,7 @@ function drop_rascals( db_ip, existing_rules, config)
       -- trop d'hotes dans ce network, bannir sa plage
       local net_ban = net .. "0/24"
       if not session_network_bans[net_ban] then
-        add_drop( net_ban, existing_rules, config.whitelist, "blacklist_nets")
+        add_drop_to_file( net_ban, ip_already_banned, config.whitelist, "banned_nets",Hbanned_nets)
         session_network_bans[net_ban] = net_ban
       end
     else
@@ -176,7 +170,7 @@ function drop_rascals( db_ip, existing_rules, config)
       if type(hosts) == "table" then
         for _, host in pairs( hosts) do
           if type(host) == "table" and host.count > host_threshold then
-            add_drop ( net .. host.host, existing_rules, config.whitelist, "blacklist_hosts")
+            add_drop_to_file ( net .. host.host, ip_already_banned, config.whitelist, "banned_hosts",Hbanned_hosts)
           end
         end
       end
@@ -200,8 +194,8 @@ function create_ipset( sourcefile_with_path)
     
   -- true/nil , exec, code sortie
   --[[
-  local res, _, code = os.execute( "if [ $(iptables -L INPUT | grep blacklist | wc -l) -eq 0 ]; then iptables -I INPUT -m set --match-set blacklist_hosts src -j botoban; iptables -I INPUT -m set --match-set blacklist_nets src -j botoban; fi")
-  local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set blacklist_hosts src -j botoban; iptables -I FORWARD -m set --match-set blacklist_nets src -j botoban; fi")
+  local res, _, code = os.execute( "if [ $(iptables -L INPUT | grep blacklist | wc -l) -eq 0 ]; then iptables -I INPUT -m set --match-set banned_hosts src -j botoban; iptables -I INPUT -m set --match-set banned_nets src -j botoban; fi")
+  local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set banned_hosts src -j botoban; iptables -I FORWARD -m set --match-set banned_nets src -j botoban; fi")
   --]]
 
   else
@@ -273,11 +267,13 @@ end
 
 
 -- for speeding up treatment when looking if IP is already banned
-function get_already_blocked( rules)
+function get_already_blocked()
   local ip_blocked = {}
-  local existing_rules = get_existing_rules()
 
-  for _,v in ipairs( existing_rules) do ip_blocked[v.ip] = v.ip end
+  local extracdb_ips = [[ipset list | grep "^[0-9]"]]
+  for ip in io.popen( extracdb_ips):lines() do
+    table.insert( ip_blocked, ip)
+  end
   
   return ip_blocked
 end
@@ -289,15 +285,13 @@ function main()
 
   if not is_err then
 
-    local ip_already_blocked = get_already_blocked( existing_rules)
-
     -- load previously saved table of banned IPs.
     local db_ip = fs_tools.load_or_create_table( config.database or "base")
     is_err, err_msg, db_ip = parse_sources( config.sources, db_ip)
     
     if is_dryrun == false and is_err == false then
+      drop_rascals( db_ip, get_already_blocked(), config)
       create_drop_chain()
-      drop_rascals( db_ip, ip_already_blocked, config)
 
       if config.remove_no_match == true then
         remove_no_match( existing_rules)

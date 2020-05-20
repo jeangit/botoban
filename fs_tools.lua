@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 18 mai 2020 16:58:59
+-- $$DATE$$ : mer. 20 mai 2020 16:41:07
 
 
 -- note: handle is optional. If not provided, new temp file will be created
@@ -25,6 +25,9 @@ function file( filename, mode)
     t = {
       read_line = function()
         return hFile:read("*l")
+      end,
+      write = function( ...)
+        hFile:write( ...)
       end
     }
 
@@ -45,7 +48,11 @@ local function open_ro( filename)
 end
 
 local function open_rw( filename)
-  return file( filename, "rw")
+  return file( filename, "r+")
+end
+
+local function open_truncate( filename)
+  return file( filename, "w+")
 end
 
 
@@ -109,6 +116,11 @@ end
 -- test (start)
 local function main()
   print( "tests here")
+  --[[
+  local f = open_truncate("/tmp/toto")
+  f.write("une ligne","une autre ligne")
+  --]]
+
 end
 -- test (end)
 
@@ -121,7 +133,10 @@ if ... then
     load_or_create_table = load_or_create_table,
     save_table = save_table,
     is_existing = is_existing,
-    write_to_tempfile = write_to_tempfile
+    write_to_tempfile = write_to_tempfile,
+    open_ro = open_ro,
+    open_rw = open_rw,
+    open_truncate = open_truncate
   }
 else
   -- test
