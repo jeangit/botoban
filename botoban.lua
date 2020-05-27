@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 27 mai 2020 12:07:07
+-- $$DATE$$ : mer. 27 mai 2020 17:13:56
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -181,16 +181,16 @@ function drop_rascals( db_ip, ip_already_banned, config)
 end
 
 
--- sourcefile contains NET (not host !) ip list (one per line)
-function create_ipset( sourcefile_with_path)
-  local is_ok = true
-  local ipset_name = sourcefile_with_path:gsub( ".*%/?([^%.]+).*","%1")
+function create_ipset( ipset_name, ipset_list)
 
-  if ( fs_tools.is_existing( sourcefile_with_path)) then
-    local command_create = string.format( "ipset create %s hash:net", ipset_name)
-    local command_addfile = string.format( "ipset restore -! < " .. sourcefile_with_path)
-    os.execute( command_create)
-    os.execute( command_addfile)
+  local temp_file = "/tmp/" .. ipset_name
+  local file = fs_tools.open_truncate( temp_file)
+  file.write( table.concat( ipset_list,"\n"))
+
+
+
+  local command_ipset = string.format( "ipset restore -! < " .. temp_file)
+  os.execute( command_ipset)
     
   -- true/nil , exec, code sortie
   --[[
@@ -198,43 +198,43 @@ function create_ipset( sourcefile_with_path)
   local res, _, code = os.execute( "if [ $(iptables -L FORWARD | grep blacklist | wc -l) -eq 0 ]; then iptables -I FORWARD -m set --match-set banned_hosts src -j botoban; iptables -I FORWARD -m set --match-set banned_nets src -j botoban; fi")
   --]]
 
-  else
-    print(" ERROR file does not exist", sourcefile)
-    is_ok = false
-  end
-
-
-  return is_ok
 end
 
 
 -- le principe est le même, que ce soit une whitelist ou une blacklist
 function gen_whibla_list( config)
-  local list = nil
+  local ipset_list = {}
   local list_file = exec_path .. config[2]
   local port = config[3]
   local chain = config[4]
-  
+  local ipset_name = list_file:gsub( ".*%/([^%.]+).*","%1")
+
   if ( fs_tools.is_existing( list_file)) then
     print("gen ip range for",list_file)
     local ip_range = ip_tools.gen_ip_range( list_file)
     -- ip_range: { (début (numérique),fin (numérique),netmask (ascii : slash suivi du masque)) }
 
-    print("gen ip netmask")
-    list = ip_tools.gen_netmask( ip_range)
+    print("gen ip netmask and ipset rules",ipset_name)
+    ip_range_netmask = ip_tools.gen_netmask( ip_range)
     -- ip_range_netmask : liste indexée type avec value de type « 217.195.16.0/20 »
+
+    table.insert( ipset_list, string.format("create %s hash:net", ipset_name))
+    for _, range_net in ipairs( ip_range_netmask) do
+      table.insert( ipset_list, string.format("add %s %s", ipset_name, range_net))
+    end
 
   else
     print ("ERROR ! [White/Black]list file does not exist:", list_file)
   end
 
-  return list
+  return ipset_name, ipset_list
 end
 
 function add_whitelist( config)
-  local whitelist = gen_whibla_list( config)
-  if whitelist then
-    --local is_ok = create_ipset( whitelist_file)
+  local ipset_name, ipset_whitelist = gen_whibla_list( config)
+  if (#ipset_whitelist > 0) then
+
+    create_ipset( ipset_name, ipset_whitelist)
 
   end
 end
