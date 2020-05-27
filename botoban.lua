@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 20 mai 2020 16:42:30
+-- $$DATE$$ : mer. 27 mai 2020 12:07:07
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -208,20 +208,35 @@ function create_ipset( sourcefile_with_path)
 end
 
 
-function add_whitelist( config)
-  local whitelist_file = exec_path .. config[2]
+-- le principe est le même, que ce soit une whitelist ou une blacklist
+function gen_whibla_list( config)
+  local list = nil
+  local list_file = exec_path .. config[2]
   local port = config[3]
   local chain = config[4]
-  local whitelist = {}
+  
+  if ( fs_tools.is_existing( list_file)) then
+    print("gen ip range for",list_file)
+    local ip_range = ip_tools.gen_ip_range( list_file)
+    -- ip_range: { (début (numérique),fin (numérique),netmask (ascii : slash suivi du masque)) }
 
-  if ( fs_tools.is_existing( whitelist_file)) then
-    --local is_ok = create_ipset( whitelist_file)
-    local ip_range = ip_tools.gen_ip_range( whitelist_file)
+    print("gen ip netmask")
+    list = ip_tools.gen_netmask( ip_range)
+    -- ip_range_netmask : liste indexée type avec value de type « 217.195.16.0/20 »
+
   else
-    print ("ERROR ! Whitelist file does not exist:", whitelist_file)
-    os.exit(1)
+    print ("ERROR ! [White/Black]list file does not exist:", list_file)
   end
 
+  return list
+end
+
+function add_whitelist( config)
+  local whitelist = gen_whibla_list( config)
+  if whitelist then
+    --local is_ok = create_ipset( whitelist_file)
+
+  end
 end
 
 function parse_sources( sources, db_ip)
