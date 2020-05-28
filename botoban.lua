@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 27 mai 2020 17:13:56
+-- $$DATE$$ : jeu. 28 mai 2020 17:00:30
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -107,7 +107,8 @@ function display_base( db_ip)
     end
 end
 
--- TODO à factoriser (voir create_ipset() qui contient ce qu'il faut pour remplacer ça)
+-- TODO à factoriser (voir create_ipset_with_list() qui est partiellement commun)
+-- voir également add_drop_to_file()
 function create_drop_chain()
   print(" -- create iplist blacklists")
   os.execute( "ipset create banned_hosts hash:ip")
@@ -124,6 +125,8 @@ function create_drop_chain()
 end
 
 
+-- TODO à factoriser (voir create_ipset_with_list() qui utilise une table et écrit au dernier
+-- moment dans un fichier temporaire)
 function add_drop_to_file( ip, existing_rules, whitelist, ipfilter_name, destfile)
 
   if not existing_rules[ip] then
@@ -181,15 +184,15 @@ function drop_rascals( db_ip, ip_already_banned, config)
 end
 
 
-function create_ipset( ipset_name, ipset_list)
+function create_ipset_with_list( ipset_name, ipset_list)
 
   local temp_file = "/tmp/" .. ipset_name
   local file = fs_tools.open_truncate( temp_file)
   file.write( table.concat( ipset_list,"\n"))
+  file.flush() -- important, autrement il peut manquer des données pour le « ipset restore » qui suit
 
-
-
-  local command_ipset = string.format( "ipset restore -! < " .. temp_file)
+  --  local command_ipset = string.format( "ipset restore -! < " .. temp_file)
+  local command_ipset = string.format( [[ipset restore -! --file %s]], temp_file)
   os.execute( command_ipset)
     
   -- true/nil , exec, code sortie
@@ -205,8 +208,6 @@ end
 function gen_whibla_list( config)
   local ipset_list = {}
   local list_file = exec_path .. config[2]
-  local port = config[3]
-  local chain = config[4]
   local ipset_name = list_file:gsub( ".*%/([^%.]+).*","%1")
 
   if ( fs_tools.is_existing( list_file)) then
@@ -218,7 +219,7 @@ function gen_whibla_list( config)
     ip_range_netmask = ip_tools.gen_netmask( ip_range)
     -- ip_range_netmask : liste indexée type avec value de type « 217.195.16.0/20 »
 
-    table.insert( ipset_list, string.format("create %s hash:net", ipset_name))
+    table.insert( ipset_list, string.format("create %s hash:net hashsize 1024 maxelem 65536", ipset_name))
     for _, range_net in ipairs( ip_range_netmask) do
       table.insert( ipset_list, string.format("add %s %s", ipset_name, range_net))
     end
@@ -231,10 +232,24 @@ function gen_whibla_list( config)
 end
 
 function add_whitelist( config)
+  local port = config[3]
+  local chain = config[4]
+  
   local ipset_name, ipset_whitelist = gen_whibla_list( config)
+  
   if (#ipset_whitelist > 0) then
+    create_ipset_with_list( ipset_name, ipset_whitelist)
 
-    create_ipset( ipset_name, ipset_whitelist)
+    -- si l'IP tentant de se connecter n'est pas dans la whitelist, saute à la régle « botoban »
+    shell_cmd = string.format(
+                [[ if [ $(iptables -L %s | grep %s | wc -l) -eq 0 ]; then
+                   iptables -I %s -p tcp --dport %s -m set ! --match-set %s src -j botoban; fi]], 
+                chain, port,
+                chain, port, ipset_name )
+
+    --print(shell_cmd)
+    os.execute( shell_cmd)
+    os.exit(1)
 
   end
 end

@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : mer. 20 mai 2020 16:41:07
+-- $$DATE$$ : jeu. 28 mai 2020 10:30:55
 
 
 -- note: handle is optional. If not provided, new temp file will be created
@@ -26,8 +26,13 @@ function file( filename, mode)
       read_line = function()
         return hFile:read("*l")
       end,
+
       write = function( ...)
         hFile:write( ...)
+      end,
+
+      flush = function()
+        hFile:flush()
       end
     }
 
@@ -136,7 +141,8 @@ if ... then
     write_to_tempfile = write_to_tempfile,
     open_ro = open_ro,
     open_rw = open_rw,
-    open_truncate = open_truncate
+    open_truncate = open_truncate,
+    flush = flush
   }
 else
   -- test
