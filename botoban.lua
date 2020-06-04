@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : jeu. 28 mai 2020 17:00:30
+-- $$DATE$$ : lun. 01 juin 2020 09:12:10
 
 --[[
  - bannissement par plage des networks qui utilisent plusieurs hotes.
@@ -249,7 +249,6 @@ function add_whitelist( config)
 
     --print(shell_cmd)
     os.execute( shell_cmd)
-    os.exit(1)
 
   end
 end
