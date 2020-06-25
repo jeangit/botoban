@@ -1,11 +1,6 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 01 juin 2020 09:12:10
+-- $$DATE$$ : lun. 22 juin 2020 11:07:39
 
---[[
- - bannissement par plage des networks qui utilisent plusieurs hotes.
- - les IPs qui n'insistent pas sont débans, pour soulager netfilter.
- - sauvegarde et chargement de l'état du bannissement.
---]]
 
 --[[ trouver networks repères de pirates:
 iptables -L INPUT -n | sed 's/.*\-\-\ \+\(\([0-9]\+\.\)\{3\}\).*/\1/' | sort | uniq -c -d
