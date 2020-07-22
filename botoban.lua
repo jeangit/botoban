@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
--- $$DATE$$ : lun. 22 juin 2020 11:07:39
+-- $$DATE$$ : mer. 22 juil. 2020 17:12:19
 
 
 --[[ trouver networks repères de pirates:
@@ -30,8 +30,9 @@ local function add_database( db_ip, line)
   if db_ip[network][host] then
     -- l'hôte existe déjà, incrémenter son compteur de hits
     db_ip[network][host].count = db_ip[network][host].count + 1
+    dp_ip[network][host].host_last_seen = os.time()
   else
-    db_ip[network][host] = { host=host, count=1, host_added=os.time() }
+    db_ip[network][host] = { host=host, count=1, host_last_seen=os.time() }
     -- il suffit de comparer net_added à last_host_added pour voir si
     -- il convient de bannir le network. (si une seule IP, les deux valeurs sont == )
     db_ip[network].last_host_added=os.time()
@@ -93,7 +94,7 @@ function display_base( db_ip)
         else
           print("    --> ." .. net_detail_value.host,
                           "count: " .. net_detail_value.count,
-                          "host added: " .. os.date("%c",net_detail_value.host_added))
+                          "host added: " .. os.date("%c",net_detail_value.host_last_seen))
         end
       end
       print(net_details)
