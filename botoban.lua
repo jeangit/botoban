@@ -18,6 +18,7 @@ local filename_banned_nets = "/tmp/banned_nets"
 local filename_banned_hosts = "/tmp/banned_hosts"
 
 local function add_database( db_ip, line)
+  print(db_ip , line)
   local ip = line:match( "%d+%.%d+%.%d+%.%d+")
   local network=ip:match("%d+%.%d+%.%d+%.")
   local host=ip:match(".*%.(%d+)")
@@ -72,7 +73,7 @@ function parse_journald_logs( unit, since, filter, db_ip)
 end
 
 function parse_dmesg_logs( filter, db_ip)
-  local cmd = string.format("dmesg") -- | sed '/%s/!d;s/.*SRC=\([0-9\.]\+\).*/\1/' | sort | uniq", filter)
+  local cmd = string.format([[ dmesg | sed '/%s/!d;s/.*SRC=\([0-9\.]\+\).*/\1/' | sort | uniq ]], filter)
   db_ip = call_coroutine_logs(cmd, db_ip, filter)
   return db_ip
 end
@@ -254,7 +255,7 @@ function parse_sources( sources, db_ip)
   if sources then
     for _,src in pairs(sources) do
       if src[1] == "dmesg" then
-        parse_dmesg( src[2], db_ip)
+        parse_dmesg_logs( src[2], db_ip)
 
       elseif src[1] == "whitelist" then
         add_whitelist( src)
