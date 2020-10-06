@@ -21,7 +21,7 @@ return
   sources = {
     { "sshd","1 hour", "invalid user" },
     { "postfix", "1 hour", "LOGIN authentication failed" },
-    { "dmesg", "", "ssh" },
+--    { "dmesg", "", "ssh" },
     -- blacklist and whitelist are using another format
     -- "blacklist" or "whitelist", "ip_file", "port", "chain"
     -- those lists contains *networks* ip lists (_not_ hosts!)
